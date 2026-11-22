@@ -27,7 +27,7 @@ def table(items, exclude=()):
 
 
 def _plotly_config(fig, height=300):
-    fig.update_layout(height=height, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=12, r=12, t=18, b=12), font=dict(family="Inter, Segoe UI, sans-serif", color="#122033"), legend=dict(orientation="h", y=1.08, x=0))
+    fig.update_layout(height=height, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=12, r=12, t=34, b=42), font=dict(family="Inter, Segoe UI, sans-serif", color="#122033"), legend=dict(orientation="h", y=1.12, x=0))
     fig.update_xaxes(showgrid=False, linecolor="#e2e8f0")
     fig.update_yaxes(gridcolor="#edf2f7", zeroline=False)
     return fig
@@ -51,10 +51,10 @@ def home_view(session):
     metrics = st.columns(4)
     metrics[0].metric("Patients", len(patients))
     metrics[1].metric("Active admissions", len(active))
-    metrics[2].metric("Bed occupancy", f"{occupancy:.0f}%", f"{len(occupied_bed_ids)} of {len(beds)} beds" if beds else "No beds recorded")
+    metrics[2].metric("Bed occupancy", f"{occupancy:.1f}%", f"{len(occupied_bed_ids)} of {len(beds)} beds" if beds else "No beds recorded")
     metrics[3].metric("Doctors", len(doctors))
 
-    section_header("Operational pulse", "Trends and occupancy are calculated from recorded database rows; no forecast is shown.")
+    section_header("Operational pulse", "Fictional demo records only. Trends and occupancy are calculated from recorded database rows; no forecast is shown.")
     left, right = st.columns((1.35, 1))
     with left:
         counts = Counter(admission.admitted_on for admission in admissions)
@@ -62,8 +62,9 @@ def home_view(session):
             start = min(counts)
             end = max(max(counts), date.today())
             days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
-            figure = go.Figure(go.Scatter(x=days, y=[counts.get(day, 0) for day in days], mode="lines+markers", line=dict(color="#0f766e", width=3), marker=dict(size=6)))
-            figure.update_layout(title="Recorded admissions", xaxis_title=None, yaxis_title="Admissions")
+            values = [counts.get(day, 0) for day in days]
+            figure = go.Figure(go.Bar(x=days, y=values, marker_color="#0f766e", hovertemplate="%{x|%b %d, %Y}<br>Admissions: %{y:d}<extra></extra>"))
+            figure.update_layout(title="Daily recorded admissions", xaxis_title="Admission date", yaxis_title="Admissions", xaxis=dict(tickformat="%b %d", automargin=True), yaxis=dict(dtick=1, tickformat="d", rangemode="tozero"))
             st.plotly_chart(_plotly_config(figure, 310), width="stretch", config={"displayModeBar": False})
         else:
             st.info("No admission records are available for a trend yet.")
@@ -251,12 +252,18 @@ def manage_view(session):
 def dashboard(factory):
     apply_theme()
     sidebar_brand()
-    st.sidebar.caption("Fictional operational records · Experimental LOS estimates")
+    st.sidebar.caption("Use the selector below to move between verified local records and experimental ML workflows.")
     if notice := st.session_state.pop("notice", None):
         st.success(notice)
-    st.sidebar.markdown("**Hospital operations**")
+    st.sidebar.markdown("**Hospital Operations**")
+    st.sidebar.caption("Home · Patients · Doctors · Beds · Manage records")
     page = st.sidebar.radio("Navigation", ("Home", "Patients", "Doctors", "Beds", "Manage records", "Historical records", "Prediction", "Explainability", "Drift Monitoring", "Retraining", "Snowflake"))
-    st.sidebar.markdown("**ML analytics & monitoring**")
+    st.sidebar.markdown("**Machine Learning**")
+    st.sidebar.caption("Historical records · Prediction · Explainability · Drift Monitoring")
+    st.sidebar.markdown("**MLOps & Cloud**")
+    st.sidebar.caption("Retraining · Snowflake")
+    st.sidebar.markdown("**Data scope**")
+    st.sidebar.caption("Hospital Operations uses fictional demo records. Machine Learning uses historical UCI encounter data and is experimental.")
     if page == "Prediction":
         from loswatch.prediction_ui import prediction_view
         prediction_view()

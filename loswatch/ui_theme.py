@@ -39,6 +39,12 @@ div[data-testid="stMetricValue"] { color: var(--los-ink); font-size: 1.6rem; }
 div[data-testid="stDataFrame"] { border: 1px solid var(--los-border); border-radius: 12px; overflow: hidden; }
 div[data-testid="stExpander"] { border-color: var(--los-border); border-radius: 12px; }
 button[kind="primary"] { background: var(--los-teal); border-color: var(--los-teal); }
+@media (max-width: 700px) {
+  .los-page-title { font-size: 1.55rem; }
+  .los-page-description { font-size: .88rem; }
+  div[data-testid="stMetric"] { padding: .7rem .75rem; }
+  div[data-testid="stMetricValue"] { font-size: 1.3rem; }
+}
 </style>
 """
 

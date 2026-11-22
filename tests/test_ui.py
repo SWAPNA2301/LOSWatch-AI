@@ -60,6 +60,7 @@ def test_home_command_center_and_operational_filters(factory, monkeypatch):
     assert app.sidebar.radio[0].value == "Home"
     assert app.metric[0].value == "20"
     assert app.metric[1].value == "15"
+    assert app.metric[2].value == "62.5%"
     app.sidebar.radio[0].set_value("Beds").run()
     assert not app.exception
     assert any("Showing" in item.value for item in app.caption)
