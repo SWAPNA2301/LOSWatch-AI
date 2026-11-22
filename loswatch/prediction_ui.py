@@ -7,6 +7,7 @@ import streamlit as st
 from loswatch.ml.data import HISTORY
 from loswatch.prediction import (
     ADMISSION_SOURCES, ADMISSION_TYPES, AGES, MODEL_DIR, PredictionError,
+    active_model_dir,
     artifact_signature, load_bundle, predict_los,
 )
 
@@ -20,7 +21,7 @@ def prediction_view():
     st.header("Experimental LOS prediction")
     st.warning("Experimental use only — not clinically actionable. Do not use this estimate for treatment, discharge or bed-allocation decisions.")
     st.caption("Enter fictional admission details only. This separate form does not fill missing values from synthetic patient profiles or historical encounters. Historical completed encounters retain their actual LOS in Historical records.")
-    directory = os.environ.get("LOSWATCH_MODEL_DIR", str(MODEL_DIR))
+    directory = os.environ.get("LOSWATCH_MODEL_DIR", str(active_model_dir()))
     try:
         bundle = cached_bundle(directory, artifact_signature(directory))
     except PredictionError as exc:
@@ -31,7 +32,8 @@ def prediction_view():
         return
 
     st.subheader("Saved Random Forest performance")
-    metrics = bundle.metrics["models"]["RandomForest"]["test"]
+    selected_model = bundle.metrics["selected_model"]
+    metrics = bundle.metrics["models"][selected_model].get("test") or bundle.metrics["models"][selected_model]["validation"]
     columns = st.columns(3)
     columns[0].metric("Test MAE (days)", f"{metrics['MAE']:.3f}")
     columns[1].metric("Test RMSE (days)", f"{metrics['RMSE']:.3f}")

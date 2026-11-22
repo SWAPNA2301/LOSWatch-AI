@@ -13,6 +13,7 @@ import pandas as pd
 from loswatch.ml.data import FEATURES, HISTORY, ROOT, sha256
 
 MODEL_DIR = ROOT / "artifacts" / "phase21"
+REGISTRY_DIR = ROOT / "artifacts" / "model_registry"
 ARTIFACTS = ("best_pipeline.joblib", "feature_schema.json", "metrics.json")
 LOGGER = logging.getLogger(__name__)
 AGES = tuple(f"[{start}-{start + 10})" for start in range(0, 100, 10))
@@ -57,6 +58,19 @@ def artifact_signature(directory=MODEL_DIR):
         raise PredictionError("Prediction unavailable: the local Phase 2.1 model, schema, metrics or checksum manifest is missing or unreadable.") from exc
 
 
+def active_model_dir():
+    """Use an explicitly approved registry model, falling back to Phase 2.1."""
+    pointer = REGISTRY_DIR / "current.json"
+    if pointer.exists():
+        try:
+            directory = Path(json.loads(pointer.read_text(encoding="utf-8"))["path"])
+            if (directory / "best_pipeline.joblib").exists():
+                return directory
+        except (OSError, KeyError, TypeError, json.JSONDecodeError):
+            pass
+    return MODEL_DIR
+
+
 def load_bundle(directory=MODEL_DIR):
     """Only operator-controlled local artifacts; never accept a joblib upload."""
     directory = Path(directory)
@@ -69,18 +83,19 @@ def load_bundle(directory=MODEL_DIR):
         metrics = json.loads((directory / "metrics.json").read_text(encoding="utf-8"))
         if schema.get("version") != "2.1" or schema.get("raw_required_features") != FEATURES:
             raise PredictionError("Prediction unavailable: incompatible admission feature schema.")
-        if metrics.get("phase") != "2.1" or metrics.get("selected_model") != "RandomForest":
-            raise PredictionError("Prediction unavailable: these artifacts are not the selected Phase 2.1 Random Forest.")
-        model_metrics = metrics["models"]["RandomForest"]
-        if model_metrics["trial"] != metrics["selected_trial"]:
+        if metrics.get("phase") not in ("2.1", "5"):
+            raise PredictionError("Prediction unavailable: unsupported model artifact phase.")
+        selected_model = metrics.get("selected_model")
+        model_metrics = metrics.get("models", {}).get(selected_model, {})
+        if not selected_model or model_metrics.get("trial") != metrics.get("selected_trial"):
             raise PredictionError("Prediction unavailable: model and evaluation metadata disagree.")
+        score = model_metrics.get("test") or model_metrics.get("validation")
         for name in ("MAE", "RMSE", "R2"):
-            value = model_metrics["test"][name]
+            value = score[name]
             if type(value) not in (float, int) or not math.isfinite(value) or (name != "R2" and value < 0):
                 raise PredictionError("Prediction unavailable: invalid model evaluation metrics.")
         import joblib
         import sklearn
-        from sklearn.ensemble import RandomForestRegressor
         from sklearn.exceptions import InconsistentVersionWarning
         from sklearn.pipeline import Pipeline
         from sklearn.utils.validation import check_is_fitted
@@ -91,8 +106,8 @@ def load_bundle(directory=MODEL_DIR):
         with warnings.catch_warnings():
             warnings.simplefilter("error", InconsistentVersionWarning)
             pipeline = joblib.load(directory / "best_pipeline.joblib")
-        if not isinstance(pipeline, Pipeline) or not isinstance(pipeline.named_steps.get("model"), RandomForestRegressor):
-            raise PredictionError("Prediction unavailable: expected a Random Forest pipeline.")
+        if not isinstance(pipeline, Pipeline) or not hasattr(pipeline.named_steps.get("model"), "predict"):
+            raise PredictionError("Prediction unavailable: expected a supported regression pipeline.")
         transformer = pipeline.named_steps.get("admission_features")
         if not isinstance(transformer, AdmissionFeatures21):
             raise PredictionError("Prediction unavailable: expected the Phase 2.1 admission transformer.")

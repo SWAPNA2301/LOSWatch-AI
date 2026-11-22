@@ -181,7 +181,7 @@ def analyze(reference: pd.DataFrame, current: pd.DataFrame, *, model_id: str = M
         item["alert_reasons"] = reasons
         if reasons:
             alerts.append({"feature": name, "reasons": reasons})
-    return {"schema_version": "phase4.v1", "phase": PHASE, "model_id": model_id, "created_utc": datetime.now(timezone.utc).isoformat(), "scenario": scenario, "sample_sizes": {"reference": len(ref), "current": len(cur)}, "alpha": alpha, "thresholds": thresholds, "alerts": alerts, "drift_detected": bool(alerts), "features": features}
+    return {"schema_version": "phase4.v1", "phase": PHASE, "model_id": model_id, "created_utc": datetime.now(timezone.utc).isoformat(), "scenario": scenario, "simulated": str(scenario).startswith("Simulated drift") or str(scenario).startswith("No drift"), "sample_sizes": {"reference": len(ref), "current": len(cur)}, "alpha": alpha, "thresholds": thresholds, "alerts": alerts, "drift_detected": bool(alerts), "features": features}
 
 
 def save_report(report: dict[str, Any], directory: str | Path = REPORT_DIR) -> Path:

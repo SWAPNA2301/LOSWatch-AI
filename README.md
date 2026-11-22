@@ -110,6 +110,12 @@ The **Drift Monitoring** page compares reproducible current admission batches wi
 
 The page includes labeled no-drift and simulated numeric, categorical, missingness, unseen-category and combined scenarios. Each run records the model ID, UTC timestamp, sample sizes, thresholds, scenario and per-feature results under `artifacts/phase4/reports/`. Monitoring is read-only: it does not retrain or modify operational, historical or prediction data.
 
+## Phase 5: retraining and model governance
+
+The **Retraining** page evaluates labeled batches with MAE/RMSE and long-stay error metrics, combines performance and drift alerts into a retraining recommendation, trains candidate pipelines on eligible labeled data with patient-disjoint train/validation splits, and compares every candidate with the current model on the same validation patients. Candidates are versioned under `artifacts/phase5/`; promotion and rollback require an approver identity and are recorded in `artifacts/model_registry/audit.jsonl`. The active prediction model uses the approved registry pointer when present and otherwise falls back to the existing Phase 2.1 artifacts.
+
+The original full CSV is not a genuine new production batch: it contains the same patients used for development and the frozen test holdout. Phase 5 therefore evaluates that file only on the saved test partition and reuses the saved train/validation/test assignments for candidate training. Simulated Phase 4 drift reports are explicitly labeled and ignored by operational retraining recommendations; only observed drift or labeled performance alerts can trigger one.
+
 ## Historical records dashboard
 
 The **Historical records** navigation item is a separate, read-only view of UCI encounters. Search by encounter ID, historical patient ID, or diagnosis-code substring, and filter medication indicators. Results are paginated in groups of 50. Selecting an encounter shows diagnosis codes, all 23 medication indicators, admission type/source, discharge disposition, readmission outcome and **actual** length of stay. The data contains no calendar admission dates, patient names, named doctors or bed assignments; the app does not invent them. Diagnosis codes remain ICD-9-CM codes rather than inferred disease names.

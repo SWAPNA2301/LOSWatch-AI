@@ -137,7 +137,7 @@ def dashboard(factory):
     st.caption("Fictional operations · Historical UCI records · Experimental LOS estimates")
     if notice := st.session_state.pop("notice", None):
         st.success(notice)
-    page = st.sidebar.radio("Navigation", ("Patients", "Doctors", "Beds", "Manage records", "Historical records", "Prediction", "Drift Monitoring"))
+    page = st.sidebar.radio("Navigation", ("Patients", "Doctors", "Beds", "Manage records", "Historical records", "Prediction", "Drift Monitoring", "Retraining"))
     if page == "Prediction":
         from loswatch.prediction_ui import prediction_view
         prediction_view()
@@ -149,6 +149,10 @@ def dashboard(factory):
     if page == "Drift Monitoring":
         from loswatch.drift_ui import drift_view
         drift_view()
+        return
+    if page == "Retraining":
+        from loswatch.retraining_ui import retraining_view
+        retraining_view()
         return
     st.caption("Fictional operational records only")
     with factory() as session:
