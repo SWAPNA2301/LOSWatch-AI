@@ -104,6 +104,12 @@ All 101,766 encounters passed row validation; no exact duplicates were found. Th
 
 The median baseline is the saved winner under the validation-MAE rule. Both learned models slightly improve squared-error metrics but fail to beat the baseline on MAE. The restricted admission-only feature set provides weak predictive signal in this experiment; no hyperparameters were changed after viewing test results. Full precision and version details are in the generated metrics artifact.
 
+## Phase 4: data drift monitoring
+
+The **Drift Monitoring** page compares reproducible current admission batches with the saved UCI reference snapshot using the same seven Phase 2.1 admission-time inputs. Numeric utilization features use KS, PSI, KL divergence and Wasserstein distance; categorical features use PSI, KL divergence and a chi-square test. Missingness and unseen categories are reported separately, and hypothesis-test p-values use Benjamini-Hochberg correction across features.
+
+The page includes labeled no-drift and simulated numeric, categorical, missingness, unseen-category and combined scenarios. Each run records the model ID, UTC timestamp, sample sizes, thresholds, scenario and per-feature results under `artifacts/phase4/reports/`. Monitoring is read-only: it does not retrain or modify operational, historical or prediction data.
+
 ## Historical records dashboard
 
 The **Historical records** navigation item is a separate, read-only view of UCI encounters. Search by encounter ID, historical patient ID, or diagnosis-code substring, and filter medication indicators. Results are paginated in groups of 50. Selecting an encounter shows diagnosis codes, all 23 medication indicators, admission type/source, discharge disposition, readmission outcome and **actual** length of stay. The data contains no calendar admission dates, patient names, named doctors or bed assignments; the app does not invent them. Diagnosis codes remain ICD-9-CM codes rather than inferred disease names.
