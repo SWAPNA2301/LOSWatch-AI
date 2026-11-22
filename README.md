@@ -116,6 +116,10 @@ The **Retraining** page evaluates labeled batches with MAE/RMSE and long-stay er
 
 The original full CSV is not a genuine new production batch: it contains the same patients used for development and the frozen test holdout. Phase 5 therefore evaluates that file only on the saved test partition and reuses the saved train/validation/test assignments for candidate training. Simulated Phase 4 drift reports are explicitly labeled and ignored by operational retraining recommendations; only observed drift or labeled performance alerts can trigger one.
 
+## Phase 6: explainable AI
+
+The **Explainability** page uses SHAP on the approved active LOS pipeline after its saved admission feature engineering and preprocessing. It shows patient-level transformed-feature contributions, global mean absolute SHAP importance, prediction reconstruction error, model version and a downloadable JSON report. Explanations are capped at 200 admissions with a 100-row background cap, are cached using the active artifact signature, and fail safely for missing SHAP or unsupported model types. SHAP values are associative model explanations, not causal effects; LOS predictions remain experimental and are not clinical recommendations.
+
 ## Historical records dashboard
 
 The **Historical records** navigation item is a separate, read-only view of UCI encounters. Search by encounter ID, historical patient ID, or diagnosis-code substring, and filter medication indicators. Results are paginated in groups of 50. Selecting an encounter shows diagnosis codes, all 23 medication indicators, admission type/source, discharge disposition, readmission outcome and **actual** length of stay. The data contains no calendar admission dates, patient names, named doctors or bed assignments; the app does not invent them. Diagnosis codes remain ICD-9-CM codes rather than inferred disease names.

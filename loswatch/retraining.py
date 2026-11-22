@@ -222,6 +222,7 @@ def train_candidates(csv_path=DEFAULT_DATA, output=DEFAULT_OUTPUT, current_model
     write_json(output / "candidate.json", {"schema_version": "phase5.v1", "model_version": version, "status": "candidate", "model_type": model_type, "created_utc": metrics["created_utc"], "dataset_sha256": metrics["dataset_sha256"]})
     pd.concat([part[["encounter_id", "patient_nbr"]].assign(split=name) for name, part in splits.items()]).to_csv(output / "split_manifest.csv", index=False)
     write_json(output / "audit.json", {"action": "candidate_trained", "timestamp_utc": metrics["created_utc"], "model_version": version, "eligible_rows": len(frame), "cleaning": cleaning, "patient_disjoint": True, "split_audit": split_audit, "test_holdout_used_for_training": False})
+    write_json(output / "artifact_manifest.json", {name: sha256(output / name) for name in ("best_pipeline.joblib", "feature_schema.json", "metrics.json")})
     return {"output": str(output), "model_version": version, "selected_model": model_type, "selected_trial": best["name"], "candidate": best["validation"], "current": current_metrics, "candidate_results": results}
 
 
@@ -264,6 +265,11 @@ def promote_candidate(candidate_dir: str | Path, registry_dir: str | Path = REGI
     destination.mkdir(parents=True)
     for name in ("best_pipeline.joblib", "feature_schema.json", "metrics.json", "candidate.json"):
         shutil.copy2(candidate_dir / name, destination / name)
+    manifest_source = candidate_dir / "artifact_manifest.json"
+    if manifest_source.exists():
+        shutil.copy2(manifest_source, destination / "artifact_manifest.json")
+    else:
+        (destination / "artifact_manifest.json").write_text(json.dumps({name: sha256(destination / name) for name in ("best_pipeline.joblib", "feature_schema.json", "metrics.json")}, indent=2), encoding="utf-8")
     (destination / "candidate.json").write_text(json.dumps({**metadata, "status": "promoted", "promoted_utc": _utc(), "approved_by": approved_by, "approval_reason": reason}, indent=2), encoding="utf-8")
     (registry_dir / "current.json").write_text(json.dumps({"model_version": version, "path": str(destination), "approved_by": approved_by, "promoted_utc": _utc()}, indent=2), encoding="utf-8")
     _audit(registry_dir, "promote", version, approved_by, {"reason": reason})
