@@ -672,28 +672,3 @@ UCI Machine Learning Repository.
 
 [DOI: 10.24432/C5230J](https://doi.org/10.24432/C5230J)
 
-Dataset license: CC BY 4.0.
-
----
-
-## 👩‍💻 Author
-
-**Swapna Pal Chowdhury**
-
-B.Tech — Information Technology
-
-Aspiring Data Scientist | Machine Learning & Data Analytics
-
-**GitHub:** [SWAPNA2301](https://github.com/SWAPNA2301)
-
----
-
-<div align="center">
-
-### Built to demonstrate more than model training.
-
-**LOSWatch AI brings together data science, analytics, explainability, and responsible MLOps in one integrated research project.**
-
-⭐ If you find this project interesting, consider starring the repository!
-
-</div>
