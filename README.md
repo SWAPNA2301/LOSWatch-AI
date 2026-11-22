@@ -395,23 +395,6 @@ These findings are reported transparently rather than presenting the model as cl
 9. Evaluate frozen models on the preserved test partition.
 10. Save models, metrics, and artifact manifests.
 
-### Data Leakage Prevention
-
-The prediction model intentionally excludes information that may only become available during or after hospitalization.
-
-Excluded information includes:
-- Actual length of stay.
-- Discharge disposition.
-- Readmission outcome.
-- Laboratory results collected during the stay.
-- Medication changes during hospitalization.
-- Diagnoses not established as admission-time inputs.
-- Patient and encounter identifiers.
-
-The saved patient-disjoint partitions reduce patient-identity leakage across evaluation datasets.
-
----
-
 ## ⚙️ Getting Started
 
 ### Prerequisites
@@ -421,13 +404,6 @@ The saved patient-disjoint partitions reduce patient-identity leakage across eva
 - VS Code or another Python IDE.
 - Internet connection for the initial UCI dataset download.
 - Optional Snowflake account for cloud analytics.
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/SWAPNA2301/LOSWatch-AI.git
-cd LOSWatch-AI
-```
 
 ### 2. Create a Virtual Environment
 
@@ -498,49 +474,7 @@ Model artifacts are saved in versioned local directories.
 
 Existing experiment outputs are protected from accidental overwriting.
 
-### 7. Run Automated Tests
-
-```bash
-python -m pytest -q
-```
-
-The Phase 8 development workflow reported 93 passing automated tests.
-
-Test counts may change as additional functionality is added.
-
 ---
-
-## ❄️ Optional Snowflake Setup
-
-Install Snowflake dependencies:
-
-```bash
-python -m pip install -r requirements-snowflake.txt
-```
-
-Copy the configuration template:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Configure the following environment variables locally:
-
-```dotenv
-LOSWATCH_SNOWFLAKE_ACCOUNT=your-org-account
-LOSWATCH_SNOWFLAKE_USER=your-snowflake-user
-LOSWATCH_SNOWFLAKE_AUTHENTICATOR=OAUTH_AUTHORIZATION_CODE
-LOSWATCH_SNOWFLAKE_DATABASE=LOSWATCH_AI
-LOSWATCH_SNOWFLAKE_SCHEMA=MONITORING
-LOSWATCH_SNOWFLAKE_WAREHOUSE=your-existing-warehouse
-LOSWATCH_SNOWFLAKE_ROLE=LOSWATCH_APP
-```
-
-Do not commit `.env` or authentication credentials.
-
-Review the SQL files in `sql/` before initializing the Snowflake schema.
-
-Snowflake initialization and synthetic synchronization require explicit user confirmation.
 
 ---
 
@@ -618,25 +552,6 @@ It does not currently provide production-grade:
 - Comprehensive patient privacy compliance.
 - Production monitoring infrastructure.
 - Clinically validated discharge predictions.
-
-**Never upload real patient-identifiable information or use experimental LOS predictions for actual medical decisions.**
-
----
-
-## 🗺️ Development Roadmap
-
-| Phase | Feature | Status |
-|---|---|---|
-| Phase 1 | Hospital Operations Management | ✅ Complete |
-| Phase 2 | Historical Data and ML Training | ✅ Complete |
-| Phase 2.1 | Feature Engineering and Model Evaluation | ✅ Complete |
-| Phase 3 | Experimental LOS Prediction | ✅ Complete |
-| Phase 4 | Statistical Data Drift Monitoring | ✅ Complete |
-| Phase 5 | Retraining and Model Governance | ✅ Complete |
-| Phase 6 | Explainable AI with SHAP | ✅ Complete |
-| Phase 7 | Optional Snowflake Integration | ✅ Implemented |
-| Phase 8 | Professional Streamlit Dashboard | ✅ Implemented |
-| Phase 9 | Final Evaluation and Documentation | 🔄 In Progress |
 
 ---
 
