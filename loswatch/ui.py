@@ -137,7 +137,7 @@ def dashboard(factory):
     st.caption("Fictional operations · Historical UCI records · Experimental LOS estimates")
     if notice := st.session_state.pop("notice", None):
         st.success(notice)
-    page = st.sidebar.radio("Navigation", ("Patients", "Doctors", "Beds", "Manage records", "Historical records", "Prediction", "Drift Monitoring", "Retraining", "Explainability"))
+    page = st.sidebar.radio("Navigation", ("Patients", "Doctors", "Beds", "Manage records", "Historical records", "Prediction", "Drift Monitoring", "Retraining", "Explainability", "Snowflake"))
     if page == "Prediction":
         from loswatch.prediction_ui import prediction_view
         prediction_view()
@@ -157,6 +157,10 @@ def dashboard(factory):
     if page == "Explainability":
         from loswatch.explainability_ui import explainability_view
         explainability_view()
+        return
+    if page == "Snowflake":
+        from loswatch.snowflake_ui import snowflake_view
+        snowflake_view()
         return
     st.caption("Fictional operational records only")
     with factory() as session:

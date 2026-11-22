@@ -120,6 +120,47 @@ The original full CSV is not a genuine new production batch: it contains the sam
 
 The **Explainability** page uses SHAP on the approved active LOS pipeline after its saved admission feature engineering and preprocessing. It shows patient-level transformed-feature contributions, global mean absolute SHAP importance, prediction reconstruction error, model version and a downloadable JSON report. Explanations are capped at 200 admissions with a 100-row background cap, are cached using the active artifact signature, and fail safely for missing SHAP or unsupported model types. SHAP values are associative model explanations, not causal effects; LOS predictions remain experimental and are not clinical recommendations.
 
+## Phase 7A/7B: optional Snowflake integration
+
+Snowflake is an opt-in integration and is independent of the operational SQLite database. Install its separate dependency only when needed:
+
+```powershell
+.venv\Scripts\python.exe -m pip install -r requirements-snowflake.txt
+```
+
+Set the org-account identifier and target names through environment variables or the local ignored `.env`; never place credentials in source files, reports or Streamlit fields. The built-in `SNOWFLAKE$LOCAL_APPLICATION` OAuth flow is preferred for local authentication; `externalbrowser` remains supported, and password authentication remains available when `LOSWATCH_SNOWFLAKE_AUTHENTICATOR=snowflake`:
+
+```powershell
+$env:LOSWATCH_SNOWFLAKE_ACCOUNT = "your-org-account-identifier"
+$env:LOSWATCH_SNOWFLAKE_USER = "your-login-name"
+$env:LOSWATCH_SNOWFLAKE_AUTHENTICATOR = "OAUTH_AUTHORIZATION_CODE"
+# Built-in local-application OAuth needs no client ID or client secret in `.env`.
+# Legacy SAML alternative: "externalbrowser".
+# Password alternative only: set authenticator to snowflake and provide it locally.
+# $env:LOSWATCH_SNOWFLAKE_PASSWORD = "your-password"
+$env:LOSWATCH_SNOWFLAKE_WAREHOUSE = "LOS_WH"
+$env:LOSWATCH_SNOWFLAKE_DATABASE = "LOSWATCH_AI"
+$env:LOSWATCH_SNOWFLAKE_SCHEMA = "MONITORING"
+$env:LOSWATCH_SNOWFLAKE_ROLE = "LOSWATCH_APP"
+# Alternatively use LOSWATCH_SNOWFLAKE_ORG_ACCOUNT when ACCOUNT is absent.
+```
+
+For local development, copy [.env.example](./.env.example) to `.env` and fill it in locally. `.env` is gitignored; its values are loaded only when a matching process environment variable is absent, and the dashboard displays only variable names and configuration presence. Do not paste the file or any credential into chat. The **Test Snowflake connection** button runs a read-only query and shows only connection status, active role and warehouse. The setup preview renders reviewed SQL and explicitly does not execute DDL or create/provision a warehouse.
+
+The **Snowflake** page reports configuration status, offers an explicit connection check, and previews sanitized drift, model-version and registry-audit payloads. It performs no automatic uploads. The schema in `sql/snowflake_schema.sql` covers de-identified historical encounters, prediction logs, drift reports, model versions and retraining audit events. `loswatch.snowflake` validates allowlisted fields, rejects identifier-bearing historical frames, uses deterministic record hashes and parameterized `MERGE` statements for repeatable batch syncs. Call `ensure_schema()` and `sync_batch()` only from an explicit operator workflow; the dashboard preview itself never writes.
+
+Historical encounter sync requires a separately prepared de-identified frame containing only the seven admission-time features and an optional actual LOS label. Raw UCI identifiers, SQLite MRNs, patient names, credentials and raw records are rejected by default and are never uploaded automatically. Snowflake connector failures are handled without exposing exception details or secrets, and the rest of LOSWatch continues to work offline when the optional dependency or environment variables are absent.
+
+Phase 7B requires these manual steps:
+
+1. A security/admin operator reviews [sql/snowflake_admin_setup.sql](./sql/snowflake_admin_setup.sql) and applies its bootstrap statements. The reviewed script grants usage on the existing `COMPUTE_WH`; it does not create a warehouse. After initialization, the operator applies the two commented post-initialization grants/revocation. The script creates `LOSWATCH_AI`, `MONITORING` and `LOSWATCH_APP`, grants only database/schema/warehouse usage plus temporary table creation, and documents a read-only table-ownership check. It must not be run through the app, and `ACCOUNTADMIN` must not be used for the application connection.
+2. Grant `LOSWATCH_APP` to the intended service user through the approved admin process, then configure the app role in `.env`.
+3. Start the dashboard, review the read-only admin/table previews, and use **Test Snowflake connection**.
+4. Type `INITIALIZE LOSWATCH SNOWFLAKE` to create only the five application tables in the already-prepared schema. Revoke `CREATE TABLE` afterward as shown in the reviewed SQL.
+5. Type `SYNC SYNTHETIC LOSWATCH DEMO` to MERGE deterministic synthetic rows into all five tables. The sync performs parameterized query-back counts and is duplicate-safe.
+
+No automatic DDL, data uploads, real patient identifiers, raw UCI rows, SQLite records, warehouse creation, deployment or paid-resource provisioning is part of this phase. SQLite and all ML features continue to work offline.
+
 ## Historical records dashboard
 
 The **Historical records** navigation item is a separate, read-only view of UCI encounters. Search by encounter ID, historical patient ID, or diagnosis-code substring, and filter medication indicators. Results are paginated in groups of 50. Selecting an encounter shows diagnosis codes, all 23 medication indicators, admission type/source, discharge disposition, readmission outcome and **actual** length of stay. The data contains no calendar admission dates, patient names, named doctors or bed assignments; the app does not invent them. Diagnosis codes remain ICD-9-CM codes rather than inferred disease names.

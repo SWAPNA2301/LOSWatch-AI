@@ -1,0 +1,4 @@
+# Optional Phase 7A integration. Core SQLite/dashboard workflows do not need it.
+# 4.8.1 publishes a cp314 Windows wheel and depends on cffi 2.x, which also
+# has a cp314 Windows wheel. The older 3.x line can fall back to a cffi build.
+snowflake-connector-python==4.8.1
