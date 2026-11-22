@@ -6,6 +6,7 @@ import streamlit as st
 
 from loswatch.drift import REPORT_DIR
 from loswatch.retraining import DEFAULT_CURRENT, DEFAULT_DATA, DEFAULT_OUTPUT, REGISTRY_DIR, active_model_dir, evaluate_labeled_batch, promote_candidate, rollback_model, retraining_recommendation, train_candidates
+from loswatch.ui_theme import page_header, section_header
 
 
 def _latest_drift():
@@ -14,11 +15,13 @@ def _latest_drift():
 
 
 def retraining_view():
-    st.header("Retraining & model governance")
+    page_header("ML governance", "Retraining & model governance", "Evaluate, compare and promote candidates with explicit operator approval.")
     st.caption("Phase 5 · offline candidates · explicit approval required · no cloud services")
     data_path = st.text_input("Labeled LOS batch CSV", str(DEFAULT_DATA))
     current = active_model_dir()
-    st.write(f"Active model: `{current}`")
+    current_status = st.columns(2)
+    current_status[0].metric("Active model", current.name)
+    current_status[1].metric("Candidate policy", "Approval required")
     performance = None
     if st.button("Evaluate labeled batch"):
         try:
@@ -45,7 +48,7 @@ def retraining_view():
             st.error(str(exc))
     candidate = st.session_state.get("candidate_result")
     if candidate:
-        st.subheader("Candidate vs current on identical validation patients")
+        section_header("Candidate vs current", "Both models are evaluated on the identical patient-disjoint validation set.")
         st.json({"candidate": candidate["candidate"], "current": candidate["current"]})
         approver = st.text_input("Approver identity", key="promotion_approver")
         reason = st.text_area("Approval reason", key="promotion_reason")

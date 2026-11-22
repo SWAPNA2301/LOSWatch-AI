@@ -25,6 +25,7 @@ from loswatch.snowflake import (
     sync_synthetic_demo,
     test_connection,
 )
+from loswatch.ui_theme import page_header, section_header
 
 
 def _latest_json(directory: Path, pattern: str) -> dict | None:
@@ -49,7 +50,7 @@ def _safe_previews() -> dict[str, tuple[str, list[dict]]]:
 
 
 def snowflake_view():
-    st.header("Snowflake integration")
+    page_header("Cloud integration", "Snowflake integration", "Optional, manual and de-identified synchronization with local SQLite remaining the default.")
     st.caption("Phase 7A · optional · de-identified batches only · manual actions only")
     st.info("Snowflake is disabled by default. This page never uploads automatically and never reads credentials from the dashboard form. Historical sync requires a separately prepared de-identified frame; raw UCI and SQLite records are not eligible by default.")
     config = SnowflakeConfig.from_env()
@@ -74,7 +75,7 @@ def snowflake_view():
             st.error(connection_status.get("error", "Snowflake connection failed."))
         st.json(connection_status)
 
-    st.subheader("Read-only setup preview")
+    section_header("Read-only setup preview", "Reviewed SQL is displayed for manual execution; this page does not execute DDL.")
     if status["configured"]:
         try:
             admin = admin_setup_preview(config)
@@ -90,7 +91,7 @@ def snowflake_view():
     else:
         st.info("Complete configuration is required before a schema/warehouse setup preview can be rendered.")
 
-    st.subheader("Manual initialization")
+    section_header("Manual initialization", "Requires the exact confirmation text and an already configured restricted role.")
     init_text = st.text_input("Type the exact initialization confirmation", placeholder=INITIALIZATION_CONFIRMATION, key="snowflake_init_confirmation")
     if st.button("Initialize schema and tables", disabled=not status["configured"]):
         connection = None
@@ -107,7 +108,7 @@ def snowflake_view():
     if st.session_state.get("snowflake_initialized"):
         st.json(st.session_state["snowflake_initialized"])
 
-    st.subheader("Synthetic demo synchronization")
+    section_header("Synthetic demo synchronization", "Only deterministic built-in demo rows are eligible.")
     st.caption("Only deterministic built-in demo rows are eligible. Real patients, raw UCI records and SQLite records are not used.")
     sync_text = st.text_input("Type the exact synthetic-sync confirmation", placeholder=DEMO_SYNC_CONFIRMATION, key="snowflake_demo_confirmation")
     if st.button("Sync synthetic demo", disabled=not status["configured"]):
@@ -125,7 +126,7 @@ def snowflake_view():
     if st.session_state.get("snowflake_sync_status"):
         st.json(st.session_state["snowflake_sync_status"])
 
-    st.subheader("Safe batch preview")
+    section_header("Safe batch preview", "Preview payloads locally before any explicit sync action.")
     previews = _safe_previews()
     if not previews:
         st.info("No sanitized drift, model-version or registry-audit batch is available for preview.")

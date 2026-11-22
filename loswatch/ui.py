@@ -1,12 +1,15 @@
 """Streamlit views and schema-driven CRUD forms."""
-from datetime import date
+from collections import Counter
+from datetime import date, timedelta
 
+import plotly.graph_objects as go
 import streamlit as st
 from sqlalchemy import Date, Text
 from sqlalchemy.exc import OperationalError
 
 from loswatch.models import Admission, Bed, Doctor, Patient
 from loswatch.services import MODELS, ValidationError, active_admissions, delete_record, records, save_record, search_patients
+from loswatch.ui_theme import apply_theme, page_header, section_header, sidebar_brand
 
 
 def label(record):
@@ -23,21 +26,117 @@ def table(items, exclude=()):
         st.info("No records yet.")
 
 
+def _plotly_config(fig, height=300):
+    fig.update_layout(height=height, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=12, r=12, t=18, b=12), font=dict(family="Inter, Segoe UI, sans-serif", color="#122033"), legend=dict(orientation="h", y=1.08, x=0))
+    fig.update_xaxes(showgrid=False, linecolor="#e2e8f0")
+    fig.update_yaxes(gridcolor="#edf2f7", zeroline=False)
+    return fig
+
+
+def _active_stay_days(admission):
+    return max((date.today() - admission.admitted_on).days, 0)
+
+
+def home_view(session):
+    """Hospital overview built solely from the existing local records."""
+    page_header("Operations command center", "Hospital overview", "A verified snapshot of current patients, beds and recorded admissions.")
+    patients = records(session, Patient)
+    doctors = records(session, Doctor)
+    beds = records(session, Bed)
+    admissions = records(session, Admission)
+    active = active_admissions(session)
+    occupied_bed_ids = {admission.bed_id for admission in active}
+    occupancy = (len(occupied_bed_ids) / len(beds) * 100) if beds else 0
+
+    metrics = st.columns(4)
+    metrics[0].metric("Patients", len(patients))
+    metrics[1].metric("Active admissions", len(active))
+    metrics[2].metric("Bed occupancy", f"{occupancy:.0f}%", f"{len(occupied_bed_ids)} of {len(beds)} beds" if beds else "No beds recorded")
+    metrics[3].metric("Doctors", len(doctors))
+
+    section_header("Operational pulse", "Trends and occupancy are calculated from recorded database rows; no forecast is shown.")
+    left, right = st.columns((1.35, 1))
+    with left:
+        counts = Counter(admission.admitted_on for admission in admissions)
+        if counts:
+            start = min(counts)
+            end = max(max(counts), date.today())
+            days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
+            figure = go.Figure(go.Scatter(x=days, y=[counts.get(day, 0) for day in days], mode="lines+markers", line=dict(color="#0f766e", width=3), marker=dict(size=6)))
+            figure.update_layout(title="Recorded admissions", xaxis_title=None, yaxis_title="Admissions")
+            st.plotly_chart(_plotly_config(figure, 310), width="stretch", config={"displayModeBar": False})
+        else:
+            st.info("No admission records are available for a trend yet.")
+    with right:
+        wards = sorted({bed.ward for bed in beds})
+        ward_total = Counter(bed.ward for bed in beds)
+        ward_occupied = Counter(bed.ward for bed in beds if bed.id in occupied_bed_ids)
+        if wards:
+            figure = go.Figure()
+            figure.add_bar(name="Occupied", x=wards, y=[ward_occupied[ward] for ward in wards], marker_color="#0f766e")
+            figure.add_bar(name="Available", x=wards, y=[ward_total[ward] - ward_occupied[ward] for ward in wards], marker_color="#cbd5e1")
+            figure.update_layout(title="Beds by ward", barmode="stack", xaxis_title=None, yaxis_title="Beds")
+            st.plotly_chart(_plotly_config(figure, 310), width="stretch", config={"displayModeBar": False})
+        else:
+            st.info("No beds are available for occupancy analysis yet.")
+
+    lower_left, lower_right = st.columns(2)
+    with lower_left:
+        section_header("Patient mix", "Recorded sex values only.")
+        sex_counts = Counter((patient.sex or "Unknown") for patient in patients)
+        if sex_counts:
+            figure = go.Figure(go.Pie(labels=list(sex_counts), values=list(sex_counts.values()), hole=0.58, marker=dict(colors=["#2563eb", "#0f766e", "#f59e0b", "#94a3b8"])))
+            figure.update_layout(showlegend=True)
+            st.plotly_chart(_plotly_config(figure, 260), width="stretch", config={"displayModeBar": False})
+        else:
+            st.info("No patient demographics are recorded.")
+    with lower_right:
+        section_header("Recorded diagnoses", "Most frequent diagnosis labels in the local patient records.")
+        diagnoses = Counter(diagnosis.disease for patient in patients for diagnosis in patient.diagnoses)
+        if diagnoses:
+            top = diagnoses.most_common(8)[::-1]
+            figure = go.Figure(go.Bar(x=[count for _, count in top], y=[name for name, _ in top], orientation="h", marker_color="#2563eb"))
+            figure.update_layout(xaxis_title="Records", yaxis_title=None)
+            st.plotly_chart(_plotly_config(figure, 260), width="stretch", config={"displayModeBar": False})
+        else:
+            st.info("No diagnoses are recorded.")
+
+    section_header("Current bed board", "Active admissions only.")
+    bed_rows = []
+    for admission in active:
+        bed = session.get(Bed, admission.bed_id)
+        patient = session.get(Patient, admission.patient_id)
+        bed_rows.append({"Patient": patient.name if patient else "Unknown", "Ward": bed.ward if bed else "Unknown", "Bed": bed.label if bed else "Unknown", "Admitted": admission.admitted_on, "Days since admission": _active_stay_days(admission)})
+    st.dataframe(bed_rows, hide_index=True, width="stretch") if bed_rows else st.info("No active admissions are recorded.")
+
+
 def patients_view(session):
-    st.header("Patient search & profiles")
-    matches = search_patients(session, st.text_input("Search name or MRN"))
+    page_header("Hospital operations", "Patient search & profiles", "Find a patient, review their current stay and inspect recorded history.")
+    patients = records(session, Patient)
+    search = st.text_input("Search name or MRN", placeholder="e.g. DEMO-0001 or Aarav")
+    sex_options = ["All"] + sorted({patient.sex or "Unknown" for patient in patients})
+    doctor_options = ["All"] + sorted({patient.doctor.name for patient in patients if patient.doctor})
+    filters = st.columns(2)
+    selected_sex = filters[0].selectbox("Sex", sex_options)
+    selected_doctor = filters[1].selectbox("Assigned doctor", doctor_options)
+    matches = search_patients(session, search)
+    if selected_sex != "All":
+        matches = [patient for patient in matches if (patient.sex or "Unknown") == selected_sex]
+    if selected_doctor != "All":
+        matches = [patient for patient in matches if patient.doctor and patient.doctor.name == selected_doctor]
+    st.caption(f"Showing {len(matches)} of {len(patients)} recorded patients")
     if not matches:
         st.info("No matching patients. Create one in Manage records or seed the demo.")
         return
-    patient_id = st.selectbox("Patient", [p.id for p in matches], format_func=lambda key: label(next(p for p in matches if p.id == key)))
+    patient_id = st.selectbox("Patient", [patient.id for patient in matches], format_func=lambda key: label(next(patient for patient in matches if patient.id == key)))
     patient = session.get(Patient, patient_id)
     st.subheader(patient.name)
     st.write(f"MRN: {patient.mrn} | Born: {patient.date_of_birth} | Sex: {patient.sex}")
     st.write(f"Assigned doctor: {patient.doctor.name if patient.doctor else 'Unassigned'}")
-    active = next((a for a in patient.admissions if a.discharged_on is None), None)
+    active = next((admission for admission in patient.admissions if admission.discharged_on is None), None)
     if active:
         st.write(f"Current bed: {active.bed.label} · {active.bed.ward}")
-        st.metric("Current length of stay (days)", (date.today() - active.admitted_on).days)
+        st.metric("Current length of stay (days)", _active_stay_days(active))
     else:
         st.write("No active admission.")
     for title, items in (("Diseases / diagnoses", patient.diagnoses), ("Recorded medications", patient.medications), ("Admission history", patient.admissions)):
@@ -46,30 +145,47 @@ def patients_view(session):
 
 
 def doctors_view(session):
-    st.header("Doctors & assignments")
+    page_header("Hospital operations", "Doctors & assignments", "Review specialties and the patients currently assigned to each doctor.")
     patients = records(session, Patient)
-    for doctor in records(session, Doctor):
+    doctors = records(session, Doctor)
+    query = st.text_input("Search doctors", placeholder="Name or specialty")
+    specialties = ["All"] + sorted({doctor.specialty for doctor in doctors})
+    selected_specialty = st.selectbox("Specialty", specialties)
+    filtered = [doctor for doctor in doctors if (not query or query.lower() in doctor.name.lower() or query.lower() in doctor.specialty.lower()) and (selected_specialty == "All" or doctor.specialty == selected_specialty)]
+    st.caption(f"Showing {len(filtered)} of {len(doctors)} recorded doctors")
+    for doctor in filtered:
         with st.expander(f"{doctor.name} · {doctor.specialty}"):
-            table([p for p in patients if p.doctor_id == doctor.id], exclude=("doctor_id",))
+            table([patient for patient in patients if patient.doctor_id == doctor.id], exclude=("doctor_id",))
     st.subheader("Unassigned patients")
-    table([p for p in patients if p.doctor_id is None])
+    table([patient for patient in patients if patient.doctor_id is None])
     st.caption("Assign or reassign a doctor by updating the Patient record in Manage records.")
 
 
 def beds_view(session):
-    st.header("Bed occupancy")
-    occupied = {a.bed_id: a for a in active_admissions(session)}
+    page_header("Hospital operations", "Bed occupancy", "See availability and active admissions by ward using the local bed board.")
+    occupied = {admission.bed_id: admission for admission in active_admissions(session)}
+    beds = records(session, Bed)
+    wards = ["All"] + sorted({bed.ward for bed in beds})
+    filters = st.columns(2)
+    selected_ward = filters[0].selectbox("Ward", wards)
+    selected_status = filters[1].selectbox("Status", ["All", "Occupied", "Available"])
     rows = []
-    for bed in records(session, Bed):
+    for bed in beds:
         admission = occupied.get(bed.id)
+        status = "Occupied" if admission else "Available"
+        if selected_ward != "All" and bed.ward != selected_ward:
+            continue
+        if selected_status != "All" and status != selected_status:
+            continue
         patient = session.get(Patient, admission.patient_id) if admission else None
-        rows.append({"Bed": bed.label, "Ward": bed.ward, "Status": "Occupied" if admission else "Available", "Patient": label(patient) if patient else "", "Admission": admission.id if admission else None})
-    st.dataframe(rows, hide_index=True, width="stretch") if rows else st.info("No beds yet.")
+        rows.append({"Bed": bed.label, "Ward": bed.ward, "Status": status, "Patient": patient.name if patient else "", "Admitted": admission.admitted_on if admission else None})
+    st.caption(f"Showing {len(rows)} of {len(beds)} recorded beds")
+    st.dataframe(rows, hide_index=True, width="stretch") if rows else st.info("No beds match the selected filters.")
     st.caption("Transfer by updating an Admission's bed. Discharge by setting its discharge date. Only admissions without a discharge date occupy a bed.")
 
 
 def manage_view(session):
-    st.header("Manage records")
+    page_header("Hospital operations", "Manage records", "Create, update or delete local demo records with the existing validation rules.")
     kind = st.selectbox("Record type", list(MODELS))
     model = MODELS[kind]
     items = records(session, model)
@@ -133,11 +249,14 @@ def manage_view(session):
 
 
 def dashboard(factory):
-    st.title("LOSWatch-AI")
-    st.caption("Fictional operations · Historical UCI records · Experimental LOS estimates")
+    apply_theme()
+    sidebar_brand()
+    st.sidebar.caption("Fictional operational records · Experimental LOS estimates")
     if notice := st.session_state.pop("notice", None):
         st.success(notice)
-    page = st.sidebar.radio("Navigation", ("Patients", "Doctors", "Beds", "Manage records", "Historical records", "Prediction", "Drift Monitoring", "Retraining", "Explainability", "Snowflake"))
+    st.sidebar.markdown("**Hospital operations**")
+    page = st.sidebar.radio("Navigation", ("Home", "Patients", "Doctors", "Beds", "Manage records", "Historical records", "Prediction", "Explainability", "Drift Monitoring", "Retraining", "Snowflake"))
+    st.sidebar.markdown("**ML analytics & monitoring**")
     if page == "Prediction":
         from loswatch.prediction_ui import prediction_view
         prediction_view()
@@ -162,12 +281,14 @@ def dashboard(factory):
         from loswatch.snowflake_ui import snowflake_view
         snowflake_view()
         return
-    st.caption("Fictional operational records only")
     with factory() as session:
+        if page == "Home":
+            home_view(session)
+            return
         beds = records(session, Bed)
         occupied = active_admissions(session)
-        columns = st.columns(3)
-        columns[0].metric("Patients", len(records(session, Patient)))
-        columns[1].metric("Occupied beds", len(occupied))
-        columns[2].metric("Available beds", len(beds) - len(occupied))
+        summary = st.columns(3)
+        summary[0].metric("Patients", len(records(session, Patient)))
+        summary[1].metric("Occupied beds", len(occupied))
+        summary[2].metric("Available beds", len(beds) - len(occupied))
         {"Patients": patients_view, "Doctors": doctors_view, "Beds": beds_view, "Manage records": manage_view}[page](session)

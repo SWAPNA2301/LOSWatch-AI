@@ -10,6 +10,7 @@ from loswatch.prediction import (
     active_model_dir,
     artifact_signature, load_bundle, predict_los,
 )
+from loswatch.ui_theme import page_header, section_header
 
 
 @st.cache_resource(show_spinner="Loading experimental LOS model…", max_entries=2)
@@ -18,7 +19,7 @@ def cached_bundle(directory, signature):
 
 
 def prediction_view():
-    st.header("Experimental LOS prediction")
+    page_header("ML analytics", "Experimental LOS prediction", "A transparent admission-time estimate using the approved LOS model.")
     st.warning("Experimental use only — not clinically actionable. Do not use this estimate for treatment, discharge or bed-allocation decisions.")
     st.caption("Enter fictional admission details only. This separate form does not fill missing values from synthetic patient profiles or historical encounters. Historical completed encounters retain their actual LOS in Historical records.")
     directory = os.environ.get("LOSWATCH_MODEL_DIR", str(active_model_dir()))
@@ -31,7 +32,7 @@ def prediction_view():
         st.error("Prediction unavailable: the model could not be loaded. Other dashboard pages remain available.")
         return
 
-    st.subheader("Saved Random Forest performance")
+    section_header("Approved model performance", "Aggregate holdout metrics; not an individual confidence interval.")
     selected_model = bundle.metrics["selected_model"]
     metrics = bundle.metrics["models"][selected_model].get("test") or bundle.metrics["models"][selected_model]["validation"]
     columns = st.columns(3)
@@ -64,7 +65,7 @@ def prediction_view():
         except PredictionError as exc:
             st.error(str(exc))
             return
-        st.subheader("Experimental estimate")
+        section_header("Experimental estimate", "This estimate is not saved to a patient record.")
         st.metric("Predicted total LOS (days)", f"{result.total_days:.2f}")
         st.caption("Total duration from admission, not remaining days. This result is not saved to any patient record.")
         if result.estimated_discharge is None:

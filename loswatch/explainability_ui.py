@@ -1,8 +1,8 @@
 """Streamlit UI for Phase 6 explainability."""
 import json
 
-import altair as alt
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from loswatch.explainability import (
@@ -17,6 +17,7 @@ from loswatch.explainability import (
 )
 from loswatch.ml.data import HISTORY
 from loswatch.prediction import ADMISSION_SOURCES, ADMISSION_TYPES, AGES, load_bundle
+from loswatch.ui_theme import page_header, section_header
 
 
 @st.cache_resource(show_spinner="Loading approved explanation model…", max_entries=2)
@@ -25,7 +26,7 @@ def cached_explanation_bundle(directory, signature):
 
 
 def explainability_view():
-    st.header("Explainable LOS prediction")
+    page_header("ML analytics", "Explainable LOS prediction", "Inspect associative SHAP contributions for the approved admission-time model.")
     st.warning("Experimental use only. SHAP explanations are associative, not causal, and must not guide treatment, discharge or bed-allocation decisions.")
     try:
         bundle, directory, signature = load_active_bundle()
@@ -61,30 +62,23 @@ def explainability_view():
     st.caption(f"Patient SHAP reconstruction error: {report['max_reconstruction_error']:.3g}; sample cap {MAX_EXPLANATION_ROWS} rows")
     patient = report["patient_contributions"][0]
     contribution_rows = sorted(({"Feature": row["label"], "Contribution (days)": row["contribution"], "Model feature": row["feature"]} for row in patient.get("labeled_contributions", [])), key=lambda row: abs(row["Contribution (days)"]), reverse=True)
-    st.subheader("Patient-level feature contributions")
+    section_header("Patient-level feature contributions", "Signed SHAP values show how each input moves the prediction relative to the model baseline.")
     st.caption("Signed SHAP contributions: positive values increase the prediction relative to the model baseline; negative values decrease it.")
     patient_frame = pd.DataFrame(contribution_rows)
     st.dataframe(patient_frame, hide_index=True, width="stretch")
     if not patient_frame.empty:
         signed = patient_frame.sort_values("Contribution (days)")
-        signed_chart = alt.Chart(signed).mark_bar().encode(
-            x=alt.X("Contribution (days):Q", title="Contribution to predicted LOS (days)"),
-            y=alt.Y("Feature:N", sort=None, title=None),
-            color=alt.condition("datum['Contribution (days)'] >= 0", alt.value("#c2410c"), alt.value("#2563eb")),
-            tooltip=["Feature", "Model feature", "Contribution (days)"],
-        )
-        st.altair_chart(signed_chart, use_container_width=True)
-    st.subheader("Global feature importance")
+        signed_chart = go.Figure(go.Bar(x=signed["Contribution (days)"], y=signed["Feature"], orientation="h", marker_color=["#c2410c" if value >= 0 else "#2563eb" for value in signed["Contribution (days)"]], customdata=signed[["Model feature"]], hovertemplate="%{y}<br>Contribution: %{x:.3f} days<br>Model feature: %{customdata[0]}<extra></extra>"))
+        signed_chart.update_layout(height=max(280, 26 * len(signed)), xaxis_title="Contribution to predicted LOS (days)", yaxis_title=None, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=12, r=12, t=18, b=24), font=dict(family="Inter, Segoe UI, sans-serif", color="#122033"))
+        st.plotly_chart(signed_chart, width="stretch", config={"displayModeBar": False})
+    section_header("Global feature importance", "Mean absolute SHAP across representative patient-disjoint validation records.")
     st.caption(f"Mean(|SHAP|) across {report['global_sample_size']} patient-disjoint validation records ({report['global_patient_count']} patients); partition: {report['global_partition']}.")
     importance = pd.DataFrame(report["global_importance"]).head(15).sort_values("mean_abs_shap", ascending=True)
     importance_table = importance[["label", "feature", "mean_abs_shap", "mean_shap"]].rename(columns={"label": "Feature", "feature": "Model feature", "mean_abs_shap": "Mean |SHAP| (days)", "mean_shap": "Mean signed SHAP (days)"})
     st.dataframe(importance_table.sort_values("Mean |SHAP| (days)", ascending=False), hide_index=True, width="stretch")
-    importance_chart = alt.Chart(importance).mark_bar().encode(
-        x=alt.X("mean_abs_shap:Q", title="Mean |SHAP| (days)"),
-        y=alt.Y("label:N", sort=None, title=None),
-        tooltip=["label", "feature", "mean_abs_shap", "mean_shap"],
-    )
-    st.altair_chart(importance_chart, use_container_width=True)
+    importance_chart = go.Figure(go.Bar(x=importance["mean_abs_shap"], y=importance["label"], orientation="h", marker_color="#2563eb", customdata=importance[["feature", "mean_shap"]], hovertemplate="%{y}<br>Mean |SHAP|: %{x:.3f} days<br>Model feature: %{customdata[0]}<br>Mean signed SHAP: %{customdata[1]:.3f}<extra></extra>"))
+    importance_chart.update_layout(height=max(360, 25 * len(importance)), xaxis_title="Mean |SHAP| (days)", yaxis_title=None, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=12, r=12, t=18, b=24), font=dict(family="Inter, Segoe UI, sans-serif", color="#122033"))
+    st.plotly_chart(importance_chart, width="stretch", config={"displayModeBar": False})
     st.download_button("Download explanation report", json.dumps(report, indent=2), file_name="loswatch_explanation_report.json", mime="application/json")
     st.caption(" · ".join(LIMITATIONS))
     st.caption(f"Versioned report saved to {st.session_state['explanation_report_path']}")
